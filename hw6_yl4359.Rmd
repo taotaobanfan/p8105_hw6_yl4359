@@ -110,21 +110,43 @@ model_df =
     models = map(strap, ~lm(tmax ~ tmin, data = .x)),
     results1 = map(models, broom::tidy),
     results2 = map(models, broom::glance)) 
+```
 
-model_df %>%
+```{r}
+model_df_r =
+  model_df %>%
   select(-strap, -models, -results1) %>% 
-  unnest(results2) %>% 
-  ggplot(aes(x = r.squared)) +
+  unnest(results2) %>%
+  janitor::clean_names() 
+  
+model_df_r %>% 
+  ggplot(aes(x = r_squared)) +
   geom_density()
 
-model_df %>% 
+quantile_r = quantile(pull(model_df_r, r_squared),c(.025, .975))
+```
+The distribution of $\hat r^2$ is left skewed.
+
+The 95% confidence interval for $\hat r^2$ is (`r quantile_r[[1]]`, `r quantile_r[[2]]`).
+
+```{r}
+model_df_beta =
+  model_df %>% 
   select(-strap, -models, -results2) %>% 
   unnest(results1) %>% 
   select(.id, term, estimate) %>% 
   pivot_wider(names_from = term, values_from = estimate) %>%
   janitor::clean_names() %>% 
-  mutate(beta_results = log(intercept*tmin)) %>% 
+  mutate(beta_results = log(intercept*tmin)) 
+
+
+model_df_beta %>% 
   ggplot(aes(x = beta_results)) + 
   geom_density()
+
+quantile_beta = quantile(pull(model_df_beta, beta_results),c(.025, .975))
 ```
 
+The distribution of $\log(\hat\beta_0*\hat\beta_1)$ is approximately normal. 
+
+The 95% confidence interval for $\log(\hat\beta_0*\hat\beta_1)$ is (`r quantile_beta[[1]]`, `r quantile_beta[[2]]`).
