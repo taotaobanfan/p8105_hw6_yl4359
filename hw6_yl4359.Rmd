@@ -1,0 +1,88 @@
+---
+title: "p8105_hw6_yl4359"
+author: "Yue Lai"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(modelr)
+
+set.seed(10)
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%")
+
+theme_set(theme_bw() + 
+            theme(legend.position = "bottom") + 
+            theme(plot.title = element_text(hjust = 0.5)))
+```
+
+# Problem 1
+
+```{r}
+bw_data = read_csv(file = "./data/birthweight.csv") %>% 
+  mutate(babysex = as.factor(recode(babysex, "1" = "male", "2" = "female")),
+         frace = as.factor(recode(frace, "1" = "White", "2" = "Black", "3" = "Asian", "4" = "Puerto Rican", "8" = "Other", "9" = "Unknown")),
+         malform = as.factor(recode(malform, "0" = "absent", "1" = "present")),
+         mrace = as.factor(recode(mrace, "1" = "White", "2" = "Black", "3" = "Asian", "4" = "Puerto Rican", "8" = "Other"))) %>% 
+  select(bwt, blength, gaweeks, bhead, babysex, delwt, fincome)
+
+```
+
+```{r}
+fit_1 = lm(bwt ~ babysex*blength + gaweeks + delwt + fincome, data = bw_data)
+```
+
+```{r}
+bw_data %>% 
+  modelr::add_residuals(fit_1) %>% 
+  modelr::add_predictions(fit_1) %>% 
+  ggplot(aes(x = pred, y = resid)) + geom_point()
+```
+
+
+
+```{r}
+fit_2 = lm(bwt ~ blength + gaweeks, data = bw_data)
+fit_3 = lm(bwt ~ bhead*blength*babysex, data = bw_data)
+```
+
+```{r}
+cv_df = 
+  crossv_mc(bw_data, 100) 
+
+cv_df =
+  cv_df %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble))
+```
+
+
+```{r}
+cv_df = 
+  cv_df %>% 
+  mutate(fit_1 = map(train, ~lm(bwt ~ babysex*blength + gaweeks + delwt + fincome, data = .x)),
+         fit_2 = map(train, ~lm(bwt ~ blength + gaweeks, data = .x)),
+         fit_3 = map(train, ~lm(bwt ~ bhead*blength*babysex, data = .x))) %>% 
+  mutate(rmse_fit1 = map2_dbl(fit_1, test, ~rmse(model = .x, data = .y)),
+         rmse_fit2 = map2_dbl(fit_2, test, ~rmse(model = .x, data = .y)),
+         rmse_fit3 = map2_dbl(fit_3, test, ~rmse(model = .x, data = .y)))
+```
+
+```{r}
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
+```
+
